@@ -154,6 +154,15 @@ API 文档
 mvn test
 ```
 
+### 压力测试
+使用 JMeter 进行压力测试：
+
+创建 500 个并发请求，测试 /api/transactions 的响应时间和吞吐量。
+
+可以直接使用`perf/JMeter_perf.jmx` 导入到 JMeter 进行压力测试
+
+本地测试结果：`perf/create.png` `perf/query.png`
+
 容器化部署
 -------------
 
