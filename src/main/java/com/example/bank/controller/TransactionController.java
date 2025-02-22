@@ -25,4 +25,15 @@ public class TransactionController {
             @RequestParam(defaultValue = "10") int size) {
         return service.getAllTransactions(page, size);
     }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteTransaction(@PathVariable Long id) {
+        service.deleteTransaction(id);
+    }
+
+    @PutMapping("/{id}")
+    public Transaction updateTransaction(@PathVariable Long id, @RequestBody Transaction updatedTransaction) {
+        return service.updateTransaction(id, updatedTransaction);
+    }
 }

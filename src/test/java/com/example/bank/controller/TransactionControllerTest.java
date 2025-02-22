@@ -1,48 +1,39 @@
-package com.example.bank.controller;
+package com.example.bank.exception;
 
+import com.example.bank.controller.TransactionController;
 import com.example.bank.model.Transaction;
-import com.example.bank.model.TransactionStatus;
 import com.example.bank.model.TransactionType;
 import com.example.bank.service.TransactionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.Mockito;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.Collections;
 
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+@WebMvcTest(TransactionController.class)
 class TransactionControllerTest {
 
+    @Autowired
     private MockMvc mockMvc;
 
-    @Mock
+    @MockBean
     private TransactionService service;
 
-    @InjectMocks
-    private TransactionController controller;
-
     private final ObjectMapper objectMapper = new ObjectMapper();
-
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-        mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
-    }
 
     // 测试创建交易API
     @Test
@@ -60,6 +51,17 @@ class TransactionControllerTest {
                 .andExpect(jsonPath("$.type").value("DEPOSIT"));
     }
 
+    // 测试查询交易API
+    @Test
+    void testGetAllTransactions() throws Exception {
+        Page<Transaction> page = new PageImpl<>(Collections.singletonList(new Transaction()));
+        when(service.getAllTransactions(anyInt(), anyInt())).thenReturn(page);
+
+        mockMvc.perform(get("/api/transactions"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1));
+    }
+
     // 测试删除交易API
     @Test
     void testDeleteTransaction() throws Exception {
@@ -67,46 +69,44 @@ class TransactionControllerTest {
                 .andExpect(status().isNoContent());
     }
 
-
-
-    // 测试查询交易API
+    // 测试修改交易API
     @Test
-    void testGetAllTransactions() throws Exception {
-        // 创建一个 Transaction 对象
-        Transaction transaction = new Transaction();
-        transaction.setId(1L);
-        transaction.setType(TransactionType.DEPOSIT);
-        transaction.setAmount(BigDecimal.valueOf(100.0));
-        transaction.setSourceAccount("123456789");
-        transaction.setTargetAccount("987654321");
-        transaction.setTimestamp(LocalDateTime.now());
-        transaction.setStatus(TransactionStatus.PENDING);
-        
-        // 创建分页数据
-        Page<Transaction> page = new PageImpl<>(Collections.singletonList(transaction));
+    void testUpdateTransaction() throws Exception {
+        Transaction updatedTransaction = new Transaction();
+        updatedTransaction.setType(TransactionType.WITHDRAWAL);
+        updatedTransaction.setAmount(BigDecimal.valueOf(50.0));
 
-        // 模拟服务层返回分页数据
-        when(service.getAllTransactions(anyInt(), anyInt())).thenReturn(page);
+        when(service.updateTransaction(any(Long.class), any(Transaction.class))).thenReturn(updatedTransaction);
 
-        // 发送 GET 请求并验证响应
-        mockMvc.perform(get("/api/transactions")
-                        .param("page", "0")
-                        .param("size", "10"))
+        mockMvc.perform(put("/api/transactions/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updatedTransaction)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content.length()").value(1))
-                .andExpect(jsonPath("$.content[0].id").value(1))
-                .andExpect(jsonPath("$.content[0].type").value("DEPOSIT"))
-                .andExpect(jsonPath("$.content[0].amount").value(100.0));
+                .andExpect(jsonPath("$.type").value("WITHDRAWAL"));
     }
 
-    // 测试无效交易
+    @Test
+    void testTransactionNotFound() throws Exception {
+        Mockito.doThrow(new TransactionNotFoundException("Transaction not found"))
+                .when(service).deleteTransaction(anyLong());
+
+        mockMvc.perform(delete("/api/transactions/999"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Transaction not found"));
+    }
+
     @Test
     void testInvalidTransaction() throws Exception {
-        Transaction invalidTransaction = new Transaction(); // 缺少必要字段
+        Transaction invalidTransaction = new Transaction();
+        invalidTransaction.setType(TransactionType.TRANSFER); // 缺少目标账户
+
+        Mockito.doThrow(new InvalidTransactionException("Invalid transaction"))
+                .when(service).createTransaction(any(Transaction.class));
 
         mockMvc.perform(post("/api/transactions")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidTransaction)))
-                .andExpect(status().isBadRequest());
+                        .content("{\"type\":\"TRANSFER\",\"amount\":100.0}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid transaction"));
     }
 }
