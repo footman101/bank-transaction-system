@@ -52,7 +52,7 @@ cd bank-transaction-system
 ```bash
 mvn spring-boot:run
 ```
-应用将启动在 http://localhost:8080。
+应用将启动在 http://localhost:8080
 
 使用 Docker：
 ```bash
